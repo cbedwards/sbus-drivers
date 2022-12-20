@@ -5,6 +5,8 @@ library(here)
 library(sp)
 library(raster)
 library(tidyverse)
+library(data.table)
+
 mygrid <- raster(here("1_raw_data/precip/annual/annualPCP_1990.tif"))
 plot(mygrid)
 boston = cbind(-71.06, 42.36)
@@ -53,8 +55,7 @@ mean(df)
 ##  option 3: polygon MINUS data coverage. Here I think we actually just use 1 and 2, and create a weighted difference.
 ##  Option 4: the collection of points corresponding to survey locations (probably just return each year)
 
-library(data.table)
-library(tidyverse)
+## For option 3:
 get_survey_points = function(species){
   raw = as.data.frame(fread(here("2_data_wrangling/cleaned-data/cleaned-data-aggregated.csv")))
   dat = raw[raw$code == code, ]
@@ -67,6 +68,8 @@ get_survey_points = function(species){
   return(list(mat = dat.mat, details = NULL))
 }
 
+## should use get_survey_points and a distance in km, and return a joint polygon of all covered space.
+## Probably easiest to use a square or a hex rather than an actual circle (blech, circles)
 make_survey_poly = function(){
   return()
 }
@@ -99,7 +102,7 @@ get_drivers = function(space, # points or polygon(s)
       print(files.list[i])
       mygrid <- raster(paste0(files.path, "/", files.list[i]))
       vals = unlist(raster::extract(mygrid, space))
-      res$value[i] = mean(vals, na.rm=T)
+      res$value[i] = mean(vals, na.rm = TRUE)
       res$cell.count[i] = length(vals)
       res$temporal.id[i] = temporal.id
     }
