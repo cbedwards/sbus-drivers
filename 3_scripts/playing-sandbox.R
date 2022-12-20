@@ -89,6 +89,20 @@ get_drivers = function(space, # points or polygon(s)
   files.list = list.files(files.path)
 
   if(class(space)[1] == "SpatialPolygons"){
+    res = data.frame(value = rep(-999, length(files.list)),
+                     cell.count = rep(-999, length(files.list)),
+                     temporal.id = rep("", length(files.list)))
+    for(i in 1:length(files.list)){
+      # grab temporal identifier from name
+      temporal.id = strsplit(files.list[i], "_")[[1]][2]
+      temporal.id = gsub("[.]tif", "", temporal.id)
+      print(files.list[i])
+      mygrid <- raster(paste0(files.path, "/", files.list[i]))
+      vals = unlist(raster::extract(mygrid, space))
+      res$value[i] = mean(vals, na.rm=T)
+      res$cell.count[i] = length(vals)
+      res$temporal.id[i] = temporal.id
+    }
   }else{
     res.list = list() #gonna do this the slightly slower way
     for(i in 1:length(files.list)){
@@ -133,6 +147,15 @@ drivers.sum = df.drivers %>%
 ggplot(drivers.sum) +
   geom_path(aes(x = year, y = value))
 
+## PROBLEM
 temp = df.drivers[df.drivers$lon == df.drivers$lon[1] &
                     df.drivers$lat == df.drivers$lat[1],]
 temp = na.omit(temp)
+
+## checking polygon version
+df.drivers = get_drivers(space = b,
+                         driver = "tmin",
+                         temporal.res = "annual")
+df.drivers$year = as.numeric(df.drivers$temporal.id)
+ggplot(df.drivers) +
+  geom_path(aes(x = year, y = value))
