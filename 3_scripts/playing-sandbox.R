@@ -1,20 +1,28 @@
+## NOTE: it appears that each of our annual tifs are actually identical? Waiting for Naresh answer.
+
 ## sandbox
 library(here)
 library(sp)
 library(raster)
 library(tidyverse)
-mygrid <- raster(here("1_raw_data/tmax/annualTMAX_1979.tif"))
+mygrid <- raster(here("1_raw_data/precip/annual/annualPCP_1990.tif"))
 plot(mygrid)
-mygrid
-# p <- rasterToPolygons(mygrid)
-# plot(p, add=T)
-
 boston = cbind(-71.06, 42.36)
 davis = cbind(-121.74, 38.54)
 locs = rbind(boston, davis)
 points(x = boston[1], y = boston[2])
 df <- raster::extract(mygrid, locs);
 df
+
+mygrid <- raster(here("1_raw_data/precip/annual/annualPCP_2020.tif"))
+plot(mygrid)
+boston = cbind(-71.06, 42.36)
+davis = cbind(-121.74, 38.54)
+locs = rbind(boston, davis)
+points(x = boston[1], y = boston[2])
+df <- raster::extract(mygrid, locs);
+df
+
 length(df)
 
 
@@ -45,7 +53,7 @@ mean(df)
 ##  option 3: polygon MINUS data coverage. Here I think we actually just use 1 and 2, and create a weighted difference.
 ##  Option 4: the collection of points corresponding to survey locations (probably just return each year)
 
-library(data.table, code)
+library(data.table)
 library(tidyverse)
 get_survey_points = function(species){
   raw = as.data.frame(fread(here("2_data_wrangling/cleaned-data/cleaned-data-aggregated.csv")))
@@ -70,12 +78,61 @@ make_survey_poly = function(){
 
 get_drivers = function(space, # points or polygon(s)
                        driver, #tmax, tmin, precip
-                       temporal.res = ){ #currently only annual
+                       temporal.res){ #currently only annual
+  ## Check that arguments are reasonable.
+  stopifnot(temporal.res %in% c("annual"))
+  stopifnot(driver %in% c("precip", "tmax", "tmin"))
+  ## space should either by polygons, or a dataframe or matrix with 2 cols (for lat + lon)
+  stopifnot(class(space) == "SpatialPolygons" |
+              (class(space)[1] %in% c("matrix", "data.frame") & ncol(space) == 2))
+  files.path = here("1_raw_data", driver, temporal.res)
+  files.list = list.files(files.path)
 
-  return(df)
+  if(class(space)[1] == "SpatialPolygons"){
+  }else{
+    res.list = list() #gonna do this the slightly slower way
+    for(i in 1:length(files.list)){
+      # grab temporal identifier from name
+      temporal.id = strsplit(files.list[i], "_")[[1]][2]
+      temporal.id = gsub("[.]tif", "", temporal.id)
+      print(files.list[i])
+      mygrid <- raster(paste0(files.path, "/", files.list[i]))
+      vals = raster::extract(mygrid, space)
+      df.cur = data.frame(lon = space[,1],
+                          lat = space[,2],
+                          value = vals)
+      df.cur$temporal.id = temporal.id
+      row.names(df.cur)=NULL
+      res.list[[i]] =df.cur
+    }
+    res = do.call(rbind, res.list)
+  }
+  return(res)
 }
 
 
+## example: extract time points from
 pts.cur = get_survey_points("PIERAP")
+df.drivers = get_drivers(space = pts.cur$mat,
+                         driver = "tmin",
+                         temporal.res = "annual")
+df.drivers$year = as.numeric(df.drivers$temporal.id)
+ggplot(df.drivers, aes(x = year, y = value)) +
+  geom_point()+
+  geom_smooth()
+## getting -1E9: whats going on? May be missing values?
+df.drivers$value[df.drivers$value < -1e8] = NA
 
-df <- raster::extract(mygrid, pts.cur$mat);
+ggplot(df.drivers, aes(x = year, y = value)) +
+  geom_point()+
+  geom_smooth()
+
+drivers.sum = df.drivers %>%
+  group_by(year) %>%
+  summarize(value = mean(value, na.rm = T))
+ggplot(drivers.sum) +
+  geom_path(aes(x = year, y = value))
+
+temp = df.drivers[df.drivers$lon == df.drivers$lon[1] &
+                    df.drivers$lat == df.drivers$lat[1],]
+temp = na.omit(temp)
